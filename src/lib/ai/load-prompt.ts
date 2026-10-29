@@ -5,6 +5,25 @@ import { parse } from "yaml";
 // Cache for loaded prompts
 const promptCache = new Map<string, PromptFile>();
 
+// Keep reads explicit so Next.js traces only these runtime files instead of
+// including the entire repository for a variable path under process.cwd().
+const promptReaders: Record<string, () => string> = {
+  "src/lib/ai/generate-example.prompt.yml": () =>
+    readFileSync(join(process.cwd(), "src/lib/ai/generate-example.prompt.yml"), "utf-8"),
+  "src/lib/ai/translate.prompt.yml": () =>
+    readFileSync(join(process.cwd(), "src/lib/ai/translate.prompt.yml"), "utf-8"),
+  "src/lib/ai/query-translator.prompt.yml": () =>
+    readFileSync(join(process.cwd(), "src/lib/ai/query-translator.prompt.yml"), "utf-8"),
+  "src/lib/ai/improve-prompt.prompt.yml": () =>
+    readFileSync(join(process.cwd(), "src/lib/ai/improve-prompt.prompt.yml"), "utf-8"),
+  "src/lib/ai/quality-check.prompt.yml": () =>
+    readFileSync(join(process.cwd(), "src/lib/ai/quality-check.prompt.yml"), "utf-8"),
+  "src/lib/ai/sql-generation.prompt.yml": () =>
+    readFileSync(join(process.cwd(), "src/lib/ai/sql-generation.prompt.yml"), "utf-8"),
+  "src/app/api/prompt-builder/chat/prompt-builder-agent.prompt.yml": () =>
+    readFileSync(join(process.cwd(), "src/app/api/prompt-builder/chat/prompt-builder-agent.prompt.yml"), "utf-8"),
+};
+
 export interface PromptMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -33,8 +52,13 @@ export function loadPrompt(relativePath: string): PromptFile {
     return promptCache.get(relativePath)!;
   }
 
-  const absolutePath = join(process.cwd(), relativePath);
-  const content = readFileSync(absolutePath, "utf-8");
+  const readPrompt = Object.hasOwn(promptReaders, relativePath)
+    ? promptReaders[relativePath]
+    : undefined;
+  if (!readPrompt) {
+    throw new Error(`Unknown prompt file: ${relativePath}`);
+  }
+  const content = readPrompt();
   const prompt = parse(content) as PromptFile;
   
   // Cache the result
